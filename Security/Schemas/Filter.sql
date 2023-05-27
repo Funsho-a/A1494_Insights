@@ -1,0 +1,2 @@
+﻿CREATE SCHEMA [Filter] AUTHORIZATION [dbo]
+GO

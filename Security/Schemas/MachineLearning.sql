@@ -1,0 +1,2 @@
+﻿CREATE SCHEMA [MachineLearning] AUTHORIZATION [dbo]
+GO
