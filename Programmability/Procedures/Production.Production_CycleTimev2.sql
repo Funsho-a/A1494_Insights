@@ -145,12 +145,20 @@ BEGIN
 			GROUP BY 			[Date],	PartFaceDMC,	Monolith,	Variant,[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
 		
 			ORDER	BY [Date] DESC
-			OFFSET ((@page - 1) * 800) ROWS
-					FETCH NEXT 800 ROWS ONLY
+			OFFSET ((@page - 1) * 200) ROWS
+					FETCH NEXT 200 ROWS ONLY
 		END
 		ELSE IF (ISNULL((@SelectPeriod), 'DAILY') = 'DAILY')
 		BEGIN
-				;WITH [CTE]	AS (
+				;
+				
+							
+		declare @i int=0
+		declare @d int=200
+		while  @i < 4
+		begin
+
+				WITH [CTE]	AS (
 		SELECT  *
 		FROM
 		(  
@@ -196,8 +204,10 @@ BEGIN
 
 			GROUP BY 	[Date],	[Full Date], [PartFaceDMC],	[Monolith],	[Variant],[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
 				ORDER	BY c.[Date] DESC
-							OFFSET ((@page - 1) * 800) ROWS
-					FETCH NEXT 800 ROWS ONLY
+				OFFSET @d*@i rows
+				FETCH NEXT @d ROWS ONLY
+				set @i+=1
+				end
 		END
 		ELSE IF((@SelectPeriod) = 'WEEKLY')
 		BEGIN			
@@ -253,8 +263,8 @@ BEGIN
 												ELSE [cycle_category] END									
 	
 				ORDER	BY c.[Date] DESC
-							OFFSET ((@page - 1) * 800) ROWS
-					FETCH NEXT 800 ROWS ONLY
+							OFFSET ((@page - 1) * 200) ROWS
+					FETCH NEXT 200 ROWS ONLY
 			END
 			ELSE IF((@SelectPeriod) = 'MONTHLY')
 			BEGIN 				
@@ -309,8 +319,8 @@ BEGIN
 													ELSE [cycle_category] END	
 
 				ORDER	BY c.[Date] DESC	
-							OFFSET ((@page - 1) * 800) ROWS
-					FETCH NEXT 800 ROWS ONLY
+							OFFSET ((@page - 1) * 200) ROWS
+					FETCH NEXT 200 ROWS ONLY
 	END
 END
 GO
