@@ -1,6 +1,6 @@
 ﻿SET QUOTED_IDENTIFIER, ANSI_NULLS ON
 GO
-CREATE PROCEDURE [Production].[Production_CycleTimev2]
+CREATE PROCEDURE [Production].[CycleTimeTest]
 			@SelectPeriod	VARCHAR(1500) = NULL,					
 			@ThisDay		DATE = NULL,
 			@DateFrom		DATE = NULL,		
@@ -9,16 +9,23 @@ CREATE PROCEDURE [Production].[Production_CycleTimev2]
 			@Month			VARCHAR(2) = NULL,
 			@VariantID		VARCHAR(1500) = NULL, 
 			@Monolith		VARCHAR(1) = NULL,
-			@Cycle			INT = NULL, 
-			@page			INT = 0
+			@Cycle			INT = NULL,
+	        @BinaryBit6 	VARCHAR(1) = NULL,
+			@BinaryBit5 	VARCHAR(1) = NULL,
+			@BinaryBit4 	VARCHAR(1) = NULL,
+			@BinaryBit3 	VARCHAR(1) = NULL,
+			@BinaryBit2 	VARCHAR(1) = NULL,
+			@BinaryBit1 	VARCHAR(1) = NULL,
+			@rw_num			INT = NULL
 AS
 BEGIN
 	SET NOCOUNT ON
 
 		DECLARE @StartDate	DATE,
-				@EndDate	DATE 
+				@EndDate	DATE,
+				@page		INT = [Function].[BinaryToDecimal](@BinaryBit6 + @BinaryBit5 + @BinaryBit4 + @BinaryBit3 + @BinaryBit2 + @BinaryBit1)
 
-
+				select [Function].[BinaryToDecimal]('0' + '0' + '0' + '0'+ '0' + '1')
 		IF @Monolith = '0'
 			SET @Monolith = NULL
 		IF ISNULL(@VariantID,'0') = '0'
@@ -36,7 +43,8 @@ BEGIN
 		IF @DateTo ='2050-12-31'
 			SET @DateTo  = NULL 
 		IF (@SelectPeriod) IS NULL
-			SET @SelectPeriod = 'DAILY'		
+			SET @SelectPeriod = 'DAILY'	
+
 
 	IF(@DateFrom IS NULL AND @DateTo is NULL)
 		BEGIN
@@ -45,8 +53,7 @@ BEGIN
 		WHERE	(CAST([DateTimeCompleted] AS DATE) >= @StartDate OR @StartDate IS NULL) 
 						AND (CAST([DateTimeCompleted] AS DATE) <= @EndDate OR @EndDate IS NULL)
 						AND (CAST([DateTimeCompleted] AS DATE) = @ThisDay OR @ThisDay IS NULL)		
-	
-		
+			
 			IF((@SelectPeriod) = 'HOURLY')	
 				SET	@StartDate = @EndDate
 			ELSE IF((@SelectPeriod) = 'DAILY')	
@@ -103,7 +110,7 @@ BEGIN
 				 ) D
 
 			;WITH [CTE]	AS (
-			SELECT  *
+			SELECT ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber, *
 			FROM
 			(  
 				SELECT DISTINCT 
@@ -129,7 +136,7 @@ BEGIN
 			
 				) AS SourceTable 		
 				)
-			SELECT	[Date],PartFaceDMC,Monolith,Variant,  [Cycle Time (s)],[Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]
+			SELECT	RowNumber,[Date], PartFaceDMC,Monolith,Variant,  [Cycle Time (s)],[Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]
 			FROM	[CTE] c
 			INNER JOIN @HourlyData hd ON c.[Date] BETWEEN hd.StartTime AND hd.EndTime 
 			WHERE	[Monolith] =		CASE	WHEN @Monolith IS NULL 
@@ -142,24 +149,17 @@ BEGIN
 												THEN [cycle_category] 
 												ELSE @Cycle END	AND
 					(CAST([Date] AS DATE) = @ThisDay OR @ThisDay IS NULL) 
-			GROUP BY 			[Date],	PartFaceDMC,	Monolith,	Variant,[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
+					and RowNumber=@rw_num
+			GROUP BY 			[Date],	PartFaceDMC,	Monolith,	Variant,[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category],RowNumber--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
 		
 			ORDER	BY [Date] DESC
-			OFFSET ((@page - 1) * 200) ROWS
-					FETCH NEXT 200 ROWS ONLY
+			OFFSET ((@page - 1) * 300) ROWS
+					FETCH NEXT 300 ROWS ONLY
 		END
 		ELSE IF (ISNULL((@SelectPeriod), 'DAILY') = 'DAILY')
 		BEGIN
-				;
-				
-							
-		declare @i int=0
-		declare @d int=200
-		while  @i < 4
-		begin
-
-				WITH [CTE]	AS (
-		SELECT  *
+				;WITH [CTE]	AS (
+		SELECT  ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber,  *
 		FROM
 		(  
 				SELECT DISTINCT 
@@ -185,8 +185,8 @@ BEGIN
 						AND [Index] =  'A'
 			) AS SourceTable 			
 			)
-			SELECT	 
-			SUBSTRING(DATENAME(dw,[DATE]), 1, 3 )+ ' ' + CAST(DAY([DATE]) AS VARCHAR(2))   AS [Date],
+			SELECT	
+			RowNumber,SUBSTRING(DATENAME(dw,[DATE]), 1, 3 )+ ' ' + CAST(DAY([DATE]) AS VARCHAR(2))   AS [Date],
 			[Full Date], [PartFaceDMC],	[Monolith],	[Variant], [Cycle Time (s)] [Cycle Time (s)], [Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]		
 			FROM	[CTE] c			
 			WHERE	(CAST([Date] AS DATE) >= @StartDate OR @StartDate IS NULL)
@@ -201,20 +201,18 @@ BEGIN
 			AND		[cycle_category] = CASE		WHEN @Cycle IS NULL
 												THEN [cycle_category]
 												ELSE [cycle_category] END 
-
-			GROUP BY 	[Date],	[Full Date], [PartFaceDMC],	[Monolith],	[Variant],[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category]--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
-				ORDER	BY c.[Date] DESC
-				OFFSET @d*@i rows
-				FETCH NEXT @d ROWS ONLY
-				set @i+=1
-				end
+			and RowNumber=@rw_num
+			GROUP BY 	[Date],	[Full Date], [PartFaceDMC],	[Monolith],	[Variant],[Cycle Time (s)], [Expected CycleTime (s)],[cycle_category],RowNumber--,[GBD Measurement Duration (s)],[Monolith Measurement Duration (s)],[Other Processes Duration (s)]	
+			ORDER	BY c.[Date] DESC
+							OFFSET ((@page - 1) * 300) ROWS
+					FETCH NEXT 300 ROWS ONLY
 		END
 		ELSE IF((@SelectPeriod) = 'WEEKLY')
 		BEGIN			
 			
 			;WITH [CTE]	AS (
-			SELECT  *,
-                ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber
+			SELECT ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber, *
+                
 			FROM
 			( 
 				SELECT DISTINCT 
@@ -239,15 +237,15 @@ BEGIN
 						AND [Index] =  'A'
 				) AS SourceTable 
 				)
-				SELECT	
+				SELECT	*,
 						'Week ' + CAST(DATEPART(wk,[Date]) AS VARCHAR(5)) AS [Date],
 						DATEPART(wk,[Date])AS [Week],
 						MONTH(CAST([Date] AS DATE)) AS [Month_Position],
 						DATENAME(MONTH,CAST([Date] AS DATE)) AS [Month],
 						YEAR(CAST([Date] AS DATE))AS [Year],
 						CAST(DATENAME(month,CAST([Date] AS DATE)) AS VARCHAR(10)) + ', ' + CAST(YEAR(CAST([Date] AS DATE)) AS VARCHAR(10)) AS [MonthYear],	
-						CAST(c.[Date] AS DATE) AS [Timestamp],
-						*
+						CAST(c.[Date] AS DATE) AS [Timestamp]
+						
 				FROM	[CTE] c			
 				WHERE	(CAST([Date] AS DATE) >= @StartDate OR @StartDate IS NULL)
 				AND		(CAST([Date] AS DATE) <= @EndDate OR @EndDate IS NULL)
@@ -261,16 +259,15 @@ BEGIN
 				AND		[cycle_category] = CASE		WHEN @Cycle IS NULL
 												THEN [cycle_category]
 												ELSE [cycle_category] END									
-	
+				and RowNumber=@rw_num
 				ORDER	BY c.[Date] DESC
-							OFFSET ((@page - 1) * 200) ROWS
-					FETCH NEXT 200 ROWS ONLY
+							OFFSET ((@page - 1) * 300) ROWS
+					FETCH NEXT 300 ROWS ONLY
 			END
 			ELSE IF((@SelectPeriod) = 'MONTHLY')
 			BEGIN 				
 				;WITH [CTE]	AS (
-			SELECT  *,
-                ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber
+			SELECT ROW_NUMBER() OVER (ORDER BY [Date] DESC) AS RowNumber, *
 			FROM
 			( 
 			SELECT DISTINCT 
@@ -296,14 +293,14 @@ BEGIN
 				) AS SourceTable 				
 				)
 				SELECT	 
-						CAST(DATENAME(MONTH, [Date]) AS VARCHAR(10)) + ', ' + CAST(YEAR([Date]) AS VARCHAR(10)) AS [Date],
+						*,CAST(DATENAME(MONTH, [Date]) AS VARCHAR(10)) + ', ' + CAST(YEAR([Date]) AS VARCHAR(10)) AS [Date],
 						DATEPART(wk,[Date])AS [Week],
 						MONTH(CAST([Date] AS DATE)) AS [Month_Position],
 						DATENAME(MONTH,CAST([Date] AS DATE)) AS [Month],
 						YEAR(CAST([Date] AS DATE))AS [Year],
 						CAST(DATENAME(month,CAST([Date] AS DATE)) AS VARCHAR(10)) + ', ' + CAST(YEAR(CAST([Date] AS DATE)) AS VARCHAR(10)) AS [MonthYear],	
-						CAST(c.[Date] AS DATE) AS [Timestamp],
-						*
+						CAST(c.[Date] AS DATE) AS [Timestamp]
+						
 				FROM	[CTE] c			
 				WHERE	(CAST([Date] AS DATE) >= @StartDate OR @StartDate IS NULL)
 				AND		(CAST([Date] AS DATE) <= @EndDate OR @EndDate IS NULL)
@@ -317,10 +314,10 @@ BEGIN
 				AND		[cycle_category] = CASE		WHEN @Cycle IS NULL
 													THEN [cycle_category]
 													ELSE [cycle_category] END	
-
+					and RowNumber=@rw_num
 				ORDER	BY c.[Date] DESC	
-							OFFSET ((@page - 1) * 200) ROWS
-					FETCH NEXT 200 ROWS ONLY
+							OFFSET ((@page - 1) * 300) ROWS
+					FETCH NEXT 300 ROWS ONLY
 	END
 END
 GO

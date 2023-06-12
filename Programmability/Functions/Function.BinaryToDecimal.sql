@@ -1,0 +1,29 @@
+﻿SET QUOTED_IDENTIFIER, ANSI_NULLS ON
+GO
+
+
+CREATE FUNCTION [Function].[BinaryToDecimal](@Binary VARCHAR(MAX))
+RETURNS BIGINT
+AS
+BEGIN
+
+	DECLARE	@Decimal BIGINT
+
+	;WITH N(V) AS 
+	(
+	  SELECT
+		ROW_NUMBER()over(ORDER BY (SELECT 1))
+	  FROM
+		(VALUES(1),(1),(1),(1))M(a),
+		(VALUES(1),(1),(1),(1))L(a),
+		(VALUES(1),(1),(1),(1))K(a)
+	)
+	SELECT TOP 1 @Decimal = SUM(SUBSTRING(REVERSE(@Binary),V,1)*POWER(CAST(2 AS BIGINT), V-1))
+	FROM   N
+	WHERE  V <= LEN(@Binary)
+
+	RETURN @Decimal
+
+	END
+
+GO
